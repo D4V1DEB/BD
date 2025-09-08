@@ -41,11 +41,6 @@ void DiskManager::getsectorPath(int plato, int superficie, int pista, int sector
     snprintf(buffer, 600, "%s/Plato%d/Superficie%d/Pista%d/Sector%d.txt", diskPath, plato, superficie, pista, sector);
 }
 
-void DiskManager::info() {
-    cout << "Capacidad del disco: " << espacioTotal << " bytes" << endl;
-    cout << "Número de sectores por bloque: " << bytesxBloq / bytesxSec << endl;
-}
-
 void DiskManager::diskEstructura() {
     for (int p = 0; p < numplatos; ++p) {
         for (int s = 0; s < numsuperficies; ++s) {
