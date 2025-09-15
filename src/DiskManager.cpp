@@ -6,10 +6,11 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-DiskManager::DiskManager(const char* path) {
+DiskManager::DiskManager(const char* path): sectorSize(0) {
     strncpy(diskPath, path, sizeof(diskPath) - 1);
     diskPath[sizeof(diskPath) - 1] = '\0'; 
     strcpy(esquemaPath, "esquema.txt");
+    sectorBuffer[0] = '\0';
 
     if (fs::exists(diskPath)) {
         loadConfig();
@@ -53,64 +54,93 @@ void DiskManager::diskEstructura() {
     }
 }
 
+
+// Función writeRegistro simplificada
 bool DiskManager::writeRegistro(const char* registro) {
-    static char sectorBuffer[512] = ""; // Buffer para acumular registros en un sector
-    static int sectorSize = 0;         // Tamaño actual del buffer
-
     int registroLength = strlen(registro);
+    int espacioNecesario = registroLength + (sectorSize > 0 ? 1 : 0);
+    
+    if (sectorSize + espacioNecesario > 512) {
+        if (!flushSectorBuffer()) {
+            return false;
+        }
+    }
+    
+    return appendToSectorBuffer(registro, registroLength);
+}
 
-    // Verificar si el registro cabe en el sector actual
-    if (sectorSize + registroLength + (sectorSize > 0 ? 1 : 0) > 512) { // +1 para '\n' si hay registros previos
-        // Escribir el contenido del buffer en un sector
-        for (int p = 0; p < numplatos; ++p) {
-            for (int s = 0; s < numsuperficies; ++s) {
-                for (int t = 0; t < numpistas; ++t) {
-                    for (int sec = 0; sec < numsectores; ++sec) {
-                        char sectorPath[256];
-                        getsectorPath(p, s, t, sec, sectorPath);
-                        if (!fs::exists(sectorPath)) {
-                            ofstream sectorTXT(sectorPath);
-                            if (sectorTXT.is_open()) {
-                                sectorTXT << sectorBuffer;
-                                sectorTXT.close();
-
-                                // Limpiar el buffer del sector
-                                sectorBuffer[0] = '\0';
-                                sectorSize = 0;
-
-                                // Intentar escribir el nuevo registro en este sector
-                                if (registroLength <= 512) {
-                                    strcpy(sectorBuffer, registro);
-                                    sectorSize = registroLength;
-                                } else {
-                                    cerr << "Error: Registro demasiado grande para un sector (" << registroLength << " bytes)." << endl;
-                                    return false;
-                                }
-
-                                return true;
-                            } else {
-                                cerr << "Error: No se pudo abrir el sector para escritura." << endl;
-                                return false;
-                            }
-                        }
+// Función helper 1
+bool DiskManager::flushSectorBuffer() {
+    for (int p = 0; p < numplatos; ++p) {
+        for (int s = 0; s < numsuperficies; ++s) {
+            for (int t = 0; t < numpistas; ++t) {
+                for (int sec = 0; sec < numsectores; ++sec) {
+                    if (tryWriteSector(p, s, t, sec)) {
+                        return true;
                     }
                 }
             }
         }
-        cerr << "Error: No hay sectores disponibles." << endl;
+    }
+    
+    cerr << "Error: No hay sectores disponibles." << endl;
+    return false;
+}
+
+// Función helper 2
+bool DiskManager::tryWriteSector(int plato, int superficie, int pista, int sector) {
+    char sectorPath[256];
+    getsectorPath(plato, superficie, pista, sector, sectorPath);
+    
+    if (fs::exists(sectorPath)) {
         return false;
     }
-
-    // Agregar el registro al buffer del sector
-    if (sectorSize > 0) {
-        strcat(sectorBuffer, "\n"); // Separador entre registros (salto de línea)
-        sectorSize += 1;            // Longitud de "\n"
+    
+    ofstream sectorTXT(sectorPath);
+    if (!sectorTXT.is_open()) {
+        cerr << "Error: No se pudo abrir el sector para escritura." << endl;
+        return false;
     }
-    strcat(sectorBuffer, registro);
-    sectorSize += registroLength;
-
+    
+    sectorTXT << sectorBuffer;
+    sectorTXT.close();
+    
+    // Reset buffer
+    sectorBuffer[0] = '\0';
+    sectorSize = 0;
+    
     return true;
 }
+
+// Función helper 3
+bool DiskManager::appendToSectorBuffer(const char* registro, int registroLength) {
+    if (sectorSize > 0) {
+        if (sectorSize + 1 >= 512) {
+            if (!flushSectorBuffer()) {
+                return false;
+            }
+        } else {
+            strcat(sectorBuffer, "\n");
+            sectorSize += 1;
+        }
+    }
+    
+    if (registroLength > 512) {
+        cerr << "Error: Registro demasiado grande para un sector (" << registroLength << " bytes)." << endl;
+        return false;
+    }
+    
+    if (sectorSize + registroLength > 512) {
+        if (!flushSectorBuffer()) {
+            return false;
+        }
+    }
+    
+    strcat(sectorBuffer, registro);
+    sectorSize += registroLength;
+    return true;
+}
+
 void DiskManager::leerRegistro(int plato, int superficie, int pista, int sector, char* buffer) const {
     char sectorPath[256];
     getsectorPath(plato, superficie, pista, sector, sectorPath);
