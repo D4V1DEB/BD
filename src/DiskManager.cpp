@@ -132,13 +132,26 @@ void DiskManager::leerRegistro(int plato, int superficie, int pista, int sector,
 const char* DiskManager::tipoDato(const char* dato) const {
     if (dato == nullptr || dato[0] == '\0') return "null";
 
+    // Verificar si es entero
     char* endPtr;
-    if (*endPtr == '\0') return "int";
+    long intValue = strtol(dato, &endPtr, 10);
+    if (endPtr != dato && *endPtr == '\0') {
+        return "int";
+    }
 
-    if (*endPtr == '\0') return "float";
+    // Verificar si es float
+    endPtr = nullptr;
+    float floatValue = strtof(dato, &endPtr);
+    if (endPtr != dato && *endPtr == '\0') {
+        return "float";
+    }
 
-    if (strlen(dato) == 1) return "char";
+    // Verificar si es char (solo un carácter)
+    if (strlen(dato) == 1) {
+        return "char";
+    }
 
+    // Por defecto, string
     return "string";
 }
 
@@ -345,8 +358,8 @@ void DiskManager::cargarCSV(const char* csvFilePath) {
     cout << "[DEBUG]Encabezados: " << encabezadosPlano << endl;
     cout << "[DEBUG]Tipos: " << tiposPlano << endl;
     cout << "--------------------------------------------------------------------------------------" << endl;
-    esquemaFile(nombreSinExtension, encabezadosPlano, tiposPlano);
     */
+    esquemaFile(nombreSinExtension, encabezadosPlano, tiposPlano);
     csvFile.close();
 }
 
