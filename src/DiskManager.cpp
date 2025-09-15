@@ -6,11 +6,11 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-DiskManager::DiskManager(const char* path): sectorSize(0) {
+DiskManager::DiskManager(const char* path) {
     strncpy(diskPath, path, sizeof(diskPath) - 1);
     diskPath[sizeof(diskPath) - 1] = '\0'; 
     strcpy(esquemaPath, "esquema.txt");
-    sectorBuffer[0] = '\0';
+    //sectorBuffer[0] = '\0'; //inicializado en la clase
 
     if (fs::exists(diskPath)) {
         loadConfig();

@@ -16,8 +16,8 @@ private:
     char diskPath[512]{};       // Ruta del disco
     char esquemaPath[512]{"esquema.txt"};     // Ruta esquema.txt
     long long espacioTotal{0};
-    char sectorBuffer[512];
-    int sectorSize;
+    char sectorBuffer[512]{'\0'};
+    int sectorSize{0};
 
     int sectoresTotal() const;
     void getsectorPath(int, int, int, int, char*) const; // Escribir ruta en un buffer
