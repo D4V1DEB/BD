@@ -10,7 +10,6 @@ DiskManager::DiskManager(const char* path) {
     strncpy(diskPath, path, sizeof(diskPath) - 1);
     diskPath[sizeof(diskPath) - 1] = '\0'; 
     strcpy(esquemaPath, "esquema.txt");
-    //sectorBuffer[0] = '\0'; //inicializado en la clase
 
     if (fs::exists(diskPath)) {
         loadConfig();
@@ -55,39 +54,65 @@ void DiskManager::diskEstructura() {
 }
 
 
-// Función writeRegistro simplificada
 bool DiskManager::writeRegistro(const char* registro) {
-    int registroLength = strlen(registro);
-    int espacioNecesario = registroLength + (sectorSize > 0 ? 1 : 0);
-    
-    if (sectorSize + espacioNecesario > 512) {
-        if (!flushSectorBuffer()) {
-            return false;
-        }
+    auto registroLength = static_cast<int>(strlen(registro));
+
+    if (int espacioNecesario = registroLength + (sectorSize > 0 ? 1 : 0); 
+        sectorSize + espacioNecesario > 512) {
+        return flushSectorBuffer() && appendToSectorBuffer(registro, registroLength);
     }
     
     return appendToSectorBuffer(registro, registroLength);
 }
 
-// Función helper 1
+bool DiskManager::addNewlineIfNeeded() {
+    if (sectorSize + 1 >= 512) {
+        return flushSectorBuffer();
+    }
+    
+    strcat(sectorBuffer, "\n");
+    sectorSize += 1;
+    return true;
+}
+
 bool DiskManager::flushSectorBuffer() {
     for (int p = 0; p < numplatos; ++p) {
-        for (int s = 0; s < numsuperficies; ++s) {
-            for (int t = 0; t < numpistas; ++t) {
-                for (int sec = 0; sec < numsectores; ++sec) {
-                    if (tryWriteSector(p, s, t, sec)) {
-                        return true;
-                    }
-                }
-            }
+        if (flushSectorBufferByPlato(p)) {
+            return true;
         }
     }
     
     cerr << "Error: No hay sectores disponibles." << endl;
     return false;
 }
+bool DiskManager::flushSectorBufferByPlato(int plato) {
+    for (int s = 0; s < numsuperficies; ++s) {
+        if (flushSectorBufferBySuperficie(plato, s)) {
+            return true;
+        }
+    }
+    return false;
+}
 
-// Función helper 2
+
+bool DiskManager::flushSectorBufferBySuperficie(int plato, int superficie) {
+    for (int t = 0; t < numpistas; ++t) {
+        if (flushSectorBufferByPista(plato, superficie, t)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool DiskManager::flushSectorBufferByPista(int plato, int superficie, int pista) {
+    for (int sec = 0; sec < numsectores; ++sec) {
+        if (tryWriteSector(plato, superficie, pista, sec)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool DiskManager::tryWriteSector(int plato, int superficie, int pista, int sector) {
     char sectorPath[256];
     getsectorPath(plato, superficie, pista, sector, sectorPath);
@@ -112,17 +137,9 @@ bool DiskManager::tryWriteSector(int plato, int superficie, int pista, int secto
     return true;
 }
 
-// Función helper 3
 bool DiskManager::appendToSectorBuffer(const char* registro, int registroLength) {
-    if (sectorSize > 0) {
-        if (sectorSize + 1 >= 512) {
-            if (!flushSectorBuffer()) {
-                return false;
-            }
-        } else {
-            strcat(sectorBuffer, "\n");
-            sectorSize += 1;
-        }
+    if (sectorSize > 0 && !addNewlineIfNeeded()) {
+        return false;
     }
     
     if (registroLength > 512) {
@@ -130,10 +147,8 @@ bool DiskManager::appendToSectorBuffer(const char* registro, int registroLength)
         return false;
     }
     
-    if (sectorSize + registroLength > 512) {
-        if (!flushSectorBuffer()) {
-            return false;
-        }
+    if (sectorSize + registroLength > 512 && !flushSectorBuffer()) {
+        return false;
     }
     
     strcat(sectorBuffer, registro);
@@ -162,93 +177,116 @@ void DiskManager::leerRegistro(int plato, int superficie, int pista, int sector,
 const char* DiskManager::tipoDato(const char* dato) const {
     if (dato == nullptr || dato[0] == '\0') return "null";
 
-    // Verificar si es entero
     char* endPtr;
-    long intValue = strtol(dato, &endPtr, 10);
+    strtol(dato, &endPtr, 10);
     if (endPtr != dato && *endPtr == '\0') {
         return "int";
     }
 
-    // Verificar si es float
-    endPtr = nullptr;
-    float floatValue = strtof(dato, &endPtr);
+    strtof(dato, &endPtr);
     if (endPtr != dato && *endPtr == '\0') {
         return "float";
     }
 
-    // Verificar si es char (solo un carácter)
     if (strlen(dato) == 1) {
         return "char";
     }
 
-    // Por defecto, string
     return "string";
 }
 
-void DiskManager::esquemaFile(const char* tableName, const char* headers, const char* types) {
-    ifstream esquemaTXT(esquemaPath);
-    if (esquemaTXT.is_open()) {
+void DiskManager::esquemaFile(const char* tableName, const char* headers, const char* types) const {
+    if (tablaExisteEnEsquema(tableName)) {
+        return;
+    }
+    
+    escribirEsquema(tableName, headers, types);
+}
+
+bool DiskManager::tablaExisteEnEsquema(const char* tableName) const {
+    if (ifstream esquemaTXT(esquemaPath); esquemaTXT.is_open()) {
         char lineBuffer[1024];
         while (esquemaTXT.getline(lineBuffer, sizeof(lineBuffer))) {
             if (strstr(lineBuffer, tableName) != nullptr) {
-                esquemaTXT.close();
-                return; // La tabla ya existe en el esquema
+                return true;
             }
         }
-        esquemaTXT.close();
     }
-    /*
-    cout << "--------------------------------------------------------------------------------------" << endl;
-    cout << "[DEBUG]Encabezados: " << headers << endl;
-    cout << "[DEBUG]Tipos: " << types << endl;
-    cout << "--------------------------------------------------------------------------------------" << endl;
-    */
+    return false;
+}
+
+void DiskManager::escribirEsquema(const char* tableName, const char* headers, const char* types) const {
     ofstream esquemaOut(esquemaPath, ios::app);
-    if (esquemaOut.is_open()) {
-        esquemaOut << tableName << " # ";
+    if (!esquemaOut.is_open()) {
+        cerr << "Error: No se pudo abrir esquema.txt." << endl;
+        return;
+    }
+    
+    esquemaOut << tableName << " # ";
+    procesarCamposEsquema(esquemaOut, headers, types);
+    esquemaOut << "\n";
+    esquemaOut.close();
+}
 
-        int i = 0, j = 0;
-        bool inHeader = true; // Alternamos entre encabezados y tipos
+void DiskManager::procesarCamposEsquema(std::ofstream& esquemaOut, const char* headers, const char* types) const {
+    int i = 0;
+    int j = 0;
+    bool inHeader = true;
 
-        while (headers[i] != '\0' || types[j] != '\0') {
-            char campo[128] = "";
-            int k = 0;
+    while (headers[i] != '\0' || types[j] != '\0') {
+        procesarCampoIndividual(esquemaOut, headers, types, i, j, inHeader);
+        
+        if (headers[i] != '\0' || types[j] != '\0') {
+            esquemaOut << " # ";
+        }
+    }
+}
 
-            // Leer un campo del encabezado o tipo
-            while ((inHeader ? headers[i] : types[j]) != ',' &&
-                   (inHeader ? headers[i] : types[j]) != '\0') {
-                campo[k++] = inHeader ? headers[i++] : types[j++];
-            }
+void DiskManager::procesarCampoIndividual(std::ofstream& esquemaOut, const char* headers, const char* types, 
+                                        int& i, int& j, bool& inHeader) const {
+    char campo[128] = "";
+    int k = 0;
 
-            campo[k] = '\0'; // Terminar el campo
+    while ((inHeader ? headers[i] : types[j]) != ',' &&
+           (inHeader ? headers[i] : types[j]) != '\0') {
+        campo[k++] = inHeader ? headers[i++] : types[j++];
+    }
 
-            // Escribir el campo en el archivo
-            esquemaOut << campo;
+    campo[k] = '\0';
+    esquemaOut << campo;
 
-            // Avanzar al siguiente campo
-            if ((inHeader ? headers[i] : types[j]) == ',') {
-                inHeader ? ++i : ++j; // Saltar la coma
-            }
+    if ((inHeader ? headers[i] : types[j]) == ',') {
+        inHeader ? ++i : ++j;
+    }
 
-            // Alternar entre encabezados y tipos
-            inHeader = !inHeader;
+    inHeader = !inHeader;
 
-            // Si aún quedan campos por procesar, escribir " # "
-            if (headers[i] != '\0' || types[j] != '\0') {
-                esquemaOut << " # ";
-            }
+    if (headers[i] == '\0' && inHeader) {
+        inHeader = false;
+    }
+}
 
-            // Si hemos terminado con los encabezados, avanzar al final de los tipos
-            if (headers[i] == '\0' && inHeader) {
-                inHeader = false;
+void DiskManager::dividirCamposCSV(const char* linea, char campos[MAX_CAMPOS][MAX_CAMPO], int& cantidad) const {
+    cantidad = 0;
+    bool entreComillas = false;
+    int j = 0;
+    for (int i = 0; linea[i] != '\0' && linea[i] != '\n'; ++i) {
+        char c = linea[i];
+
+        if (c == '"') {
+            entreComillas = !entreComillas;
+        } else if (c == ',' && !entreComillas) {
+            campos[cantidad][j] = '\0';
+            cantidad++;
+            j = 0;
+        } else {
+            if (j < MAX_CAMPO - 1) {
+                campos[cantidad][j++] = c;
             }
         }
-
-        esquemaOut << "\n";
-        esquemaOut.close();
-    } else {
-        cerr << "Error: No se pudo abrir esquema.txt." << endl;
     }
+    campos[cantidad][j] = '\0';
+    cantidad++;
 }
 
 void DiskManager::cargarCSV(const char* csvFilePath) {
@@ -258,106 +296,103 @@ void DiskManager::cargarCSV(const char* csvFilePath) {
         return;
     }
 
-    const int MAX_LINEA = 1024;
-    const int MAX_CAMPOS = 100;
-    const int MAX_CAMPO = 128;
-    const int MAX_LINEAS_TIPO = 10; // máximo líneas para inferir tipos
-
-    char lineaBuffer[MAX_LINEA];
     char encabezados[MAX_CAMPOS][MAX_CAMPO];
     char tipos[MAX_CAMPOS][MAX_CAMPO];
     int numCampos = 0;
 
-    // Función para dividir una línea CSV respetando comillas
-    auto dividirCamposCSV = [](const char* linea, char campos[MAX_CAMPOS][MAX_CAMPO], int& cantidad) {
-        cantidad = 0;
-        bool entreComillas = false;
-        int j = 0;
-        for (int i = 0; linea[i] != '\0' && linea[i] != '\n'; ++i) {
-            char c = linea[i];
+    if (!leerYProcesarEncabezados(csvFile, encabezados, tipos, numCampos)) {
+        return;
+    }
 
-            if (c == '"') {
-                entreComillas = !entreComillas;
-            } else if (c == ',' && !entreComillas) {
-                campos[cantidad][j] = '\0';
-                cantidad++;
-                j = 0;
-            } else {
-                if (j < MAX_CAMPO - 1) {
-                    campos[cantidad][j++] = c;
-                }
-            }
-        }
-        campos[cantidad][j] = '\0';
-        cantidad++;
-    };
+    inferirTiposDatos(csvFile, tipos, numCampos);
+    procesarRegistrosCSV(csvFile, numCampos);
+    
+    guardarEsquema(csvFilePath, encabezados, tipos, numCampos);
+    csvFile.close();
+}
 
-    // Leer encabezados
+bool DiskManager::leerYProcesarEncabezados(std::ifstream& csvFile, char encabezados[][MAX_CAMPO], char tipos[][MAX_CAMPO], int& numCampos) const {
+    char lineaBuffer[1024];
     if (!csvFile.getline(lineaBuffer, sizeof(lineaBuffer))) {
         cerr << "Error: El archivo CSV está vacío." << endl;
-        return;
+        return false;
     }
 
     dividirCamposCSV(lineaBuffer, encabezados, numCampos);
 
-    // Inicializar tipos a "null"
-    for (int i = 0; i < numCampos; i++) {
-        strncpy(tipos[i], "null", MAX_CAMPO - 1);
-        tipos[i][MAX_CAMPO - 1] = '\0';
+    for (int idx = 0; idx < numCampos; idx++) {
+        strncpy(tipos[idx], "null", MAX_CAMPO - 1);
+        tipos[idx][MAX_CAMPO - 1] = '\0';
     }
+    
+    return true;
+}
 
-    int lineasLeidasParaTipo = 0;
+void DiskManager::inferirTiposDatos(std::ifstream& csvFile, char tipos[][MAX_CAMPO], 
+                                  int numCampos) const {
+    const int MAX_LINEAS_TIPO = 10;
+    char lineaBuffer[1024];
     char valores[MAX_CAMPOS][MAX_CAMPO];
-    bool finArchivoInferencia = false;
+    int lineasLeidas = 0;
 
-    // Leer líneas para inferir tipos
-    while (lineasLeidasParaTipo < MAX_LINEAS_TIPO && !finArchivoInferencia) {
-        if (!csvFile.getline(lineaBuffer, sizeof(lineaBuffer))) {
-            finArchivoInferencia = true; // fin de archivo antes de 10 líneas
-            break;
-        }
-
-        int numValores = 0;
-        dividirCamposCSV(lineaBuffer, valores, numValores);
-
-        for (int i = 0; i < numValores && i < numCampos; i++) {
-            // Solo actualizar tipo si actualmente es "null"
-            if (strcmp(tipos[i], "null") == 0) {
-                const char* nuevoTipo = tipoDato(valores[i]);
-                if (strcmp(nuevoTipo, "null") != 0) {
-                    strncpy(tipos[i], nuevoTipo, MAX_CAMPO - 1);
-                    tipos[i][MAX_CAMPO - 1] = '\0';
-                }
-            }
-        }
-        lineasLeidasParaTipo++;
+    while (lineasLeidas < MAX_LINEAS_TIPO && csvFile.getline(lineaBuffer, sizeof(lineaBuffer))) {
+        procesarLineaParaInferencia(lineaBuffer, tipos, numCampos, valores);
+        lineasLeidas++;
     }
+}
 
-    // Reiniciar lectura para procesar todos los datos desde el principio
+void DiskManager::procesarLineaParaInferencia(const char* lineaBuffer, char tipos[][MAX_CAMPO], 
+                                           int numCampos, char valores[][MAX_CAMPO]) const {
+    int numValores = 0;
+    dividirCamposCSV(lineaBuffer, valores, numValores);
+
+    for (int idx = 0; idx < numValores && idx < numCampos; idx++) {
+        if (strcmp(tipos[idx], "null") == 0) {
+            actualizarTipoSiEsNecesario(tipos[idx], valores[idx]);
+        }
+    }
+}
+
+void DiskManager::actualizarTipoSiEsNecesario(char* tipoActual, const char* valor) const {
+    const char* nuevoTipo = tipoDato(valor);
+    if (strcmp(nuevoTipo, "null") != 0) {
+        strncpy(tipoActual, nuevoTipo, MAX_CAMPO - 1);
+        tipoActual[MAX_CAMPO - 1] = '\0';
+    }
+}
+
+void DiskManager::procesarRegistrosCSV(std::ifstream& csvFile, [[maybe_unused]] int numCampos) {
     csvFile.clear();
-    csvFile.seekg(0, ios::beg);
-
-    // Leer y descartar encabezado (ya lo tenemos)
+    csvFile.seekg(0, std::ios::beg);
+    
+    char lineaBuffer[1024];
+    char valores[MAX_CAMPOS][MAX_CAMPO];
+    
     csvFile.getline(lineaBuffer, sizeof(lineaBuffer));
 
-    // Procesar y escribir registros
     while (csvFile.getline(lineaBuffer, sizeof(lineaBuffer))) {
-        int numValores = 0;
-        dividirCamposCSV(lineaBuffer, valores, numValores);
+        procesarLineaCSV(lineaBuffer);
+    }
+}
 
-        char registroBuffer[1024] = "";
-        for (int i = 0; i < numValores; i++) {
-            strcat(registroBuffer, valores[i]);
-            if (i < numValores - 1) strcat(registroBuffer, " # ");
-        }
+void DiskManager::procesarLineaCSV(const char* lineaBuffer) {
+    char valores[MAX_CAMPOS][MAX_CAMPO];
+    int numValores = 0;
+    
+    dividirCamposCSV(lineaBuffer, valores, numValores);
 
-        if (!writeRegistro(registroBuffer)) {
-            cerr << "Error: No se pudo escribir un registro en el disco." << endl;
-            break;
-        }
+    char registroBuffer[1024] = "";
+    for (int idx = 0; idx < numValores; idx++) {
+        strcat(registroBuffer, valores[idx]);
+        if (idx < numValores - 1) strcat(registroBuffer, " # ");
     }
 
-    // Obtener nombre de la tabla desde el archivo CSV
+    if (!writeRegistro(registroBuffer)) {
+        std::cerr << "Error: No se pudo escribir un registro en el disco." << std::endl;
+    }
+}
+
+void DiskManager::guardarEsquema(const char* csvFilePath, char encabezados[][MAX_CAMPO], char tipos[][MAX_CAMPO], int numCampos) {
     const char* nombreTabla = strrchr(csvFilePath, '/');
     if (nombreTabla != nullptr) {
         ++nombreTabla;
@@ -365,34 +400,28 @@ void DiskManager::cargarCSV(const char* csvFilePath) {
         nombreTabla = csvFilePath;
     }
 
-    // Quitar extensión si tiene .csv
     char nombreSinExtension[64];
     strncpy(nombreSinExtension, nombreTabla, sizeof(nombreSinExtension));
     nombreSinExtension[sizeof(nombreSinExtension) - 1] = '\0';
-    char* punto = strrchr(nombreSinExtension, '.');
-    if (punto && strcmp(punto, ".csv") == 0) *punto = '\0';
+    
+    if (char* punto = strrchr(nombreSinExtension, '.'); punto && strcmp(punto, ".csv") == 0) {
+        *punto = '\0';
+    }
 
-    // Armar cadenas separadas por coma para encabezados y tipos
     char encabezadosPlano[1024] = "";
     char tiposPlano[1024] = "";
-    for (int i = 0; i < numCampos; i++) {
-        strcat(encabezadosPlano, encabezados[i]);
-        strcat(tiposPlano, tipos[i]);
-        if (i < numCampos - 1) {
+    
+    for (int idx = 0; idx < numCampos; idx++) {
+        strcat(encabezadosPlano, encabezados[idx]);
+        strcat(tiposPlano, tipos[idx]);
+        if (idx < numCampos - 1) {
             strcat(encabezadosPlano, ",");
             strcat(tiposPlano, ",");
         }
     }
-    /*
-    cout << "--------------------------------------------------------------------------------------" << endl;
-    cout << "[DEBUG]Encabezados: " << encabezadosPlano << endl;
-    cout << "[DEBUG]Tipos: " << tiposPlano << endl;
-    cout << "--------------------------------------------------------------------------------------" << endl;
-    */  
-    esquemaFile(nombreSinExtension, encabezadosPlano, tiposPlano);
-    csvFile.close();
-}
 
+    esquemaFile(nombreSinExtension, encabezadosPlano, tiposPlano);
+}
 
 void DiskManager::mostrarSector(int plato, int superficie, int pista, int sector) const {
     char buffer[512];

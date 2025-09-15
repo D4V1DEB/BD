@@ -1,8 +1,6 @@
 #include <iostream>
 #include "DiskManager.h"
 
-//g++ main.cpp DiskManager.cpp -o gestor
-
 using namespace std;
 
 void displayMenu() {
@@ -31,7 +29,7 @@ int main() {
                 break;
             case 1:
                 disk.diskEstructura();
-                //cout << "Disco creado exitosamente." << endl;
+                cout << "Disco creado." << endl;
                 break;
             case 2: {
                 char csvFile[100];
@@ -41,13 +39,10 @@ int main() {
                 break;
             }
             case 3:
-                //sql();
                 break;
             case 4:
-                //clear();
                 break;
             case 5:
-                //disk.info();
                 break;
             case 6: {
                 int plato, superficie, pista, sector;
