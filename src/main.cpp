@@ -47,7 +47,7 @@ int main() {
                 //clear();
                 break;
             case 5:
-                disk.info();
+                //disk.info();
                 break;
             case 6: {
                 int plato, superficie, pista, sector;
