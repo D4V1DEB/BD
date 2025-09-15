@@ -133,10 +133,8 @@ const char* DiskManager::tipoDato(const char* dato) const {
     if (dato == nullptr || dato[0] == '\0') return "null";
 
     char* endPtr;
-    long intValue = strtol(dato, &endPtr, 10);
     if (*endPtr == '\0') return "int";
 
-    float floatValue = strtof(dato, &endPtr);
     if (*endPtr == '\0') return "float";
 
     if (strlen(dato) == 1) return "char";
