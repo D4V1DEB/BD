@@ -12,15 +12,15 @@ private:
     int numsectores;
     int bytesxSec;
     int bytesxBloq;
-    char diskPath[512];       // Ruta del disco
-    char esquemaPath[512];    // Ruta esquema.txt
-    long long espacioTotal;
+    char diskPath[512]{};       // Ruta del disco
+    char esquemaPath[512]{"esquema.txt"};     // Ruta esquema.txt
+    long long espacioTotal{0};
 
     int sectoresTotal() const;
     void getsectorPath(int, int, int, int, char*) const; // Escribir ruta en un buffer
 
 public:
-    DiskManager(const char* path);
+    explicit DiskManager(const char* path);
     void loadConfig();
     void info();
     void diskEstructura();
