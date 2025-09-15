@@ -6,7 +6,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-DiskManager::DiskManager(const char* path) : espacioTotal(0) {
+DiskManager::DiskManager(const char* path) {
     strncpy(diskPath, path, sizeof(diskPath) - 1);
     diskPath[sizeof(diskPath) - 1] = '\0'; 
     strcpy(esquemaPath, "esquema.txt");
@@ -358,7 +358,7 @@ void DiskManager::cargarCSV(const char* csvFilePath) {
     cout << "[DEBUG]Encabezados: " << encabezadosPlano << endl;
     cout << "[DEBUG]Tipos: " << tiposPlano << endl;
     cout << "--------------------------------------------------------------------------------------" << endl;
-    */
+    */  
     esquemaFile(nombreSinExtension, encabezadosPlano, tiposPlano);
     csvFile.close();
 }
