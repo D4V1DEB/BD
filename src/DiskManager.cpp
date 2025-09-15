@@ -8,7 +8,7 @@ namespace fs = std::filesystem;
 
 DiskManager::DiskManager(const char* path) : espacioTotal(0) {
     strncpy(diskPath, path, sizeof(diskPath) - 1);
-    diskPath[sizeof(diskPath - 1)] = '\0';
+    diskPath[sizeof(diskPath) - 1] = '\0'; 
     strcpy(esquemaPath, "esquema.txt");
 
     if (fs::exists(diskPath)) {
