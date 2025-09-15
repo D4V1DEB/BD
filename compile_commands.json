@@ -1,0 +1,12 @@
+[
+  {
+    "directory": "/home/d14/Documentos/BD/DISCO",
+    "command": "g++ -c -std=c++17 -Wall -Wextra main.cpp -I.",
+    "file": "main.cpp"
+  },
+  {
+    "directory": "/home/d14/Documentos/BD/DISCO",
+    "command": "g++ -c -std=c++17 -Wall -Wextra DiskManager.cpp -I.",
+    "file": "DiskManager.cpp"
+  }
+]
