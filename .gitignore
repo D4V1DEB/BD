@@ -1,0 +1,11 @@
+# SonarQube archivos temporales
+.scannerwork/
+
+# Archivos compilados
+*.o
+*.exe
+simulador
+
+# Archivos del sistema
+.DS_Store
+*~
